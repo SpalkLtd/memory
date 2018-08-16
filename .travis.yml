@@ -1,0 +1,7 @@
+language: go
+go:
+- '1.10.x'
+install:
+- cd $GOPATH/src/github.com/SpalkLtd/memory && go get -v -t ./...
+script:
+- $GOPATH/src/github.com/SpalkLtd/memory && go test -v ./...
