@@ -19,10 +19,21 @@ type MemoryUsage struct {
 	PeakVirtMem int
 }
 
-func GetMemoryUsage() (usage MemoryUsage, err error) {
+func GetMemoryUsage() (MemoryUsage, error) {
+	return GetMemoryUsageOfPid(-1)
+}
+
+func GetMemoryUsageOfPid(id int) (usage MemoryUsage, err error) {
 
 	// linux file contains this-process info
-	f, err := os.Open("/proc/self/status")
+	idString := ""
+	if id <= 0 {
+		idString = "self"
+	} else {
+		idString = fmt.Sprintf("%d", id)
+	}
+
+	f, err := os.Open("/proc/" + idString + "/status")
 	if err != nil {
 		return
 	}
