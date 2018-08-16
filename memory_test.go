@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/SpalkLtd/synchroniser/memory"
+	"github.com/SpalkLtd/memory"
 	"github.com/stretchr/testify/require"
 )
 
