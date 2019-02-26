@@ -23,3 +23,9 @@ func TestGetMemoryOfChildProcess(t *testing.T) {
 	log.Printf("%#v\n", usage)
 	cmd.Process.Kill()
 }
+
+func TestGetCpuUsage(t *testing.T) {
+	cpu, err := memory.GetCpuUsage()
+	require.NoError(t, err)
+	log.Printf("CPU Usage: %f", cpu)
+}
