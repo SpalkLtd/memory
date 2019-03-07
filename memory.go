@@ -21,6 +21,11 @@ type MemoryUsage struct {
 	PeakVirtMem int
 }
 
+type CpuUsage struct {
+	Usage float64
+	Steal float64
+}
+
 func GetMemoryUsage() (MemoryUsage, error) {
 	return GetMemoryUsageOfPid(-1)
 }
@@ -77,7 +82,7 @@ func GetMemoryUsageOfPid(id int) (usage MemoryUsage, err error) {
 	return
 }
 
-func getCpuSample() (idle, total uint64, err error) {
+func getCpuSample() (idle, total, steal uint64, err error) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {
 		return
@@ -99,6 +104,9 @@ func getCpuSample() (idle, total uint64, err error) {
 				if i == 4 {  // idle is the 5th field in the cpu line
 					idle = val
 				}
+				if i == 8 { // steal is the 9th field in the cpu line
+					steal = val
+				}
 			}
 			break
 		}
@@ -108,10 +116,10 @@ func getCpuSample() (idle, total uint64, err error) {
 	return
 }
 
-func GetCpuUsage() (usage float64, err error) {
-	idle0, total0, err0 := getCpuSample()
+func GetCpuUsage() (usage CpuUsage, err error) {
+	idle0, total0, steal0, err0 := getCpuSample()
 	<-time.After(3 * time.Second)
-	idle1, total1, err1 := getCpuSample()
+	idle1, total1, steal1, err1 := getCpuSample()
 
 	// Handle errors after sampling as sampling is time-sensitive
 	if err0 != nil {
@@ -124,7 +132,9 @@ func GetCpuUsage() (usage float64, err error) {
 	}
 
 	idleTicks := float64(idle1 - idle0)
+	stealTicks := float64(steal1 - steal0)
 	totalTicks := float64(total1 - total0)
-	usage = (totalTicks - idleTicks) / totalTicks
+	usage.Usage = (totalTicks - idleTicks) / totalTicks
+	usage.Steal = stealTicks / totalTicks
 	return
 }
