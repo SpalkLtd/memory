@@ -138,3 +138,31 @@ func GetCpuUsage() (usage CpuUsage, err error) {
 	usage.Steal = stealTicks / totalTicks
 	return
 }
+
+type TcpConnStats struct {
+	InUse    int
+	Orphan   int
+	TimeWait int
+	Alloc    int
+	MemoryKB int
+}
+
+func GetTCPConnStats() (stats TcpConnStats, err error) {
+	f, err := os.Open("/proc/net/sockstat")
+	if err != nil {
+		return stats, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "TCP:") {
+			_, err = fmt.Sscanf(line, "TCP: inuse %d orphan %d tw %d alloc %d mem %d", &stats.InUse, &stats.Orphan, &stats.TimeWait, &stats.Alloc, &stats.MemoryKB)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
