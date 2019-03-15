@@ -2,6 +2,7 @@ package memory_test
 
 import (
 	"log"
+	"net/http"
 	"os/exec"
 	"testing"
 
@@ -28,4 +29,11 @@ func TestGetCpuUsage(t *testing.T) {
 	cpu, err := memory.GetCpuUsage()
 	require.NoError(t, err)
 	log.Printf("CPU Usage: %f", cpu)
+}
+
+func TestGetTcpConnStats(t *testing.T) {
+	http.Get("https://www.google.com")
+	stats, err := memory.GetTCPConnStats()
+	require.NoError(t, err)
+	log.Printf("%#v\n", stats)
 }
