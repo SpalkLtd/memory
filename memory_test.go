@@ -25,6 +25,12 @@ func TestGetMemoryOfChildProcess(t *testing.T) {
 	cmd.Process.Kill()
 }
 
+func TestGetContainerMemory(t *testing.T) {
+	usage, err := memory.GetMemUsageOfContainer()
+	require.NoError(t, err)
+	log.Printf("%#v\n", usage)
+}
+
 func TestGetCpuUsage(t *testing.T) {
 	cpu, err := memory.GetCpuUsage()
 	require.NoError(t, err)
