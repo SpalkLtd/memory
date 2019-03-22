@@ -21,9 +21,66 @@ type MemoryUsage struct {
 	PeakVirtMem int
 }
 
+type ContainerMemoryUsage struct {
+	MemTotal     int
+	MemFree      int
+	MemAvailable int
+	Buffers      int
+	Cached       int
+}
+
 type CpuUsage struct {
 	Usage float64
 	Steal float64
+}
+
+//GetMemUsageOfContainer does just that
+func GetMemUsageOfContainer() (usage ContainerMemoryUsage, err error) {
+	f, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	// read the entire file
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "MemTotal:") {
+			_, err = fmt.Sscanf(line, "MemTotal: %d kB", &usage.MemTotal)
+			if err != nil {
+				return
+			}
+		}
+		if strings.HasPrefix(line, "MemFree:") {
+			_, err = fmt.Sscanf(line, "MemFree: %d kB", &usage.MemFree)
+			if err != nil {
+				return
+			}
+		}
+		if strings.HasPrefix(line, "MemAvailable:") {
+			_, err = fmt.Sscanf(line, "MemAvailable: %d kB", &usage.MemAvailable)
+			if err != nil {
+				return
+			}
+		}
+		if strings.HasPrefix(line, "Buffers:") {
+			_, err = fmt.Sscanf(line, "Buffers: %d kB", &usage.Buffers)
+			if err != nil {
+				return
+			}
+		}
+		if strings.HasPrefix(line, "Cached:") {
+			_, err = fmt.Sscanf(line, "Cached: %d kB", &usage.Cached)
+			if err != nil {
+				return
+			}
+		}
+	}
+	if err = scanner.Err(); err != nil {
+		return
+	}
+	return
 }
 
 func GetMemoryUsage() (MemoryUsage, error) {
