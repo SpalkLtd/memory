@@ -46,7 +46,7 @@ func TestGetTcpConnStats(t *testing.T) {
 }
 
 func TestGetCPUUsage2(t *testing.T) {
-	sample, err := memory.GetCPUUsage2()
+	sample, err := memory.SampleCPUUsage()
 	require.NoError(t, err)
 	require.NotNil(t, sample)
 
@@ -66,7 +66,7 @@ func TestGetCPUUsage2(t *testing.T) {
 }
 
 func TestGetCPUUsage2Consistency(t *testing.T) {
-	sample, err := memory.GetCPUUsage2()
+	sample, err := memory.SampleCPUUsage()
 	require.NoError(t, err)
 
 	// Sum of per-core totals should roughly equal total CPU
@@ -85,12 +85,12 @@ func TestGetCPUUsage2Consistency(t *testing.T) {
 
 func TestCalculateGetCPUUsage2(t *testing.T) {
 	// Take two samples with a small delay
-	sample1, err := memory.GetCPUUsage2()
+	sample1, err := memory.SampleCPUUsage()
 	require.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
 
-	sample2, err := memory.GetCPUUsage2()
+	sample2, err := memory.SampleCPUUsage()
 	require.NoError(t, err)
 
 	usage := memory.CalculateCpuUsage(sample1, sample2)
@@ -114,7 +114,7 @@ func TestCalculateGetCPUUsage2(t *testing.T) {
 }
 
 func TestSampleCpuCoreCount(t *testing.T) {
-	sample, err := memory.GetCPUUsage2()
+	sample, err := memory.SampleCPUUsage()
 	require.NoError(t, err)
 
 	// Should have at least 1 core, probably more on any modern system

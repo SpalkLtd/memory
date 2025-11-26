@@ -219,7 +219,7 @@ type CoreUsage struct {
 }
 
 // SampleCpu takes an instantaneous reading from /proc/stat
-func GetCPUUsage2() (*CpuSample, error) {
+func SampleCPUUsage() (*CpuSample, error) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {
 		return nil, err
