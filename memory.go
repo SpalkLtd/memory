@@ -34,7 +34,7 @@ type CpuUsage struct {
 	Steal float64
 }
 
-//GetMemUsageOfContainer does just that
+// GetMemUsageOfContainer does just that
 func GetMemUsageOfContainer() (usage ContainerMemoryUsage, err error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -194,6 +194,104 @@ func GetCpuUsage() (usage CpuUsage, err error) {
 	usage.Usage = (totalTicks - idleTicks) / totalTicks
 	usage.Steal = stealTicks / totalTicks
 	return
+}
+
+type CpuSample struct {
+	Total     CoreSample            // Aggregate "cpu" line
+	PerCore   map[string]CoreSample // "cpu0", "cpu1", etc.
+	Timestamp time.Time
+}
+
+type CoreSample struct {
+	Idle  uint64
+	Total uint64
+	Steal uint64
+}
+
+type CpuUsage2 struct {
+	Total   CoreUsage
+	PerCore map[string]CoreUsage
+}
+
+type CoreUsage struct {
+	Usage float64
+	Steal float64
+}
+
+// SampleCpu takes an instantaneous reading from /proc/stat
+func GetCPUUsage2() (*CpuSample, error) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	sample := &CpuSample{
+		PerCore:   make(map[string]CoreSample),
+		Timestamp: time.Now(),
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 5 || !strings.HasPrefix(fields[0], "cpu") {
+			continue
+		}
+
+		core := parseCoreSample(fields[1:])
+		if fields[0] == "cpu" {
+			sample.Total = core
+		} else {
+			sample.PerCore[fields[0]] = core
+		}
+	}
+
+	return sample, scanner.Err()
+}
+
+func parseCoreSample(fields []string) CoreSample {
+	var core CoreSample
+	for i, field := range fields {
+		val, err := strconv.ParseUint(field, 10, 64)
+		if err != nil {
+			continue
+		}
+		core.Total += val
+		if i == 3 { // idle is 4th field (0-indexed)
+			core.Idle = val
+		}
+		if i == 7 { // steal is 8th field (0-indexed)
+			core.Steal = val
+		}
+	}
+	return core
+}
+
+// CalculateCpuUsage computes usage between two samples
+func CalculateCpuUsage(prev, curr *CpuSample) CpuUsage2 {
+	usage := CpuUsage2{
+		Total:   calculateCoreUsage(prev.Total, curr.Total),
+		PerCore: make(map[string]CoreUsage),
+	}
+
+	for name, currCore := range curr.PerCore {
+		if prevCore, ok := prev.PerCore[name]; ok {
+			usage.PerCore[name] = calculateCoreUsage(prevCore, currCore)
+		}
+	}
+
+	return usage
+}
+
+func calculateCoreUsage(prev, curr CoreSample) CoreUsage {
+	totalDelta := float64(curr.Total - prev.Total)
+	if totalDelta == 0 {
+		return CoreUsage{}
+	}
+	return CoreUsage{
+		Usage: (totalDelta - float64(curr.Idle-prev.Idle)) / totalDelta,
+		Steal: float64(curr.Steal-prev.Steal) / totalDelta,
+	}
 }
 
 type TcpConnStats struct {
