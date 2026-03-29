@@ -152,19 +152,33 @@ func getCpuSample() (idle, total, steal uint64, err error) {
 		fields := strings.Fields(line)
 		if fields[0] == "cpu" {
 			numFields := len(fields)
+			var guest, guestNice uint64
 			for i := 1; i < numFields; i++ {
-				val, err := strconv.ParseUint(fields[i], 10, 64)
-				if err != nil {
-					fmt.Println("Error: ", i, fields[i], err)
+				val, parseErr := strconv.ParseUint(fields[i], 10, 64)
+				if parseErr != nil {
+					fmt.Println("Error: ", i, fields[i], parseErr)
+					continue
 				}
 				total += val // tally up all the numbers to get total ticks
 				if i == 4 {  // idle is the 5th field in the cpu line
 					idle = val
 				}
+				if i == 5 { // iowait is the 6th field - also idle time
+					idle += val
+				}
 				if i == 8 { // steal is the 9th field in the cpu line
 					steal = val
 				}
+				if i == 9 { // guest is the 10th field (already counted in user)
+					guest = val
+				}
+				if i == 10 { // guest_nice is the 11th field (already counted in nice)
+					guestNice = val
+				}
 			}
+			// guest and guest_nice are already included in user and nice,
+			// so subtract them to avoid double-counting.
+			total -= guest + guestNice
 			break
 		}
 	}
@@ -188,11 +202,15 @@ func GetCpuUsage() (usage CpuUsage, err error) {
 		return
 	}
 
-	idleTicks := float64(idle1 - idle0)
-	stealTicks := float64(steal1 - steal0)
-	totalTicks := float64(total1 - total0)
-	usage.Usage = (totalTicks - idleTicks) / totalTicks
-	usage.Steal = stealTicks / totalTicks
+	totalDelta := saturatingSub(total1, total0)
+	if totalDelta == 0 {
+		return
+	}
+	idleDelta := saturatingSub(idle1, idle0)
+	stealDelta := saturatingSub(steal1, steal0)
+	td := float64(totalDelta)
+	usage.Usage = float64(totalDelta-idleDelta) / td
+	usage.Steal = float64(stealDelta) / td
 	return
 }
 
@@ -250,20 +268,34 @@ func SampleCPUUsage() (*CpuSample, error) {
 }
 
 func parseCoreSample(fields []string) CoreSample {
+	// /proc/stat cpu fields (0-indexed after label):
+	// 0:user 1:nice 2:system 3:idle 4:iowait 5:irq 6:softirq 7:steal 8:guest 9:guest_nice
+	//
+	// guest is already included in user; guest_nice is already included in nice.
+	// iowait is idle time (CPU waiting for I/O, not executing).
 	var core CoreSample
+	var guest, guestNice uint64
 	for i, field := range fields {
 		val, err := strconv.ParseUint(field, 10, 64)
 		if err != nil {
 			continue
 		}
 		core.Total += val
-		if i == 3 { // idle is 4th field (0-indexed)
+		switch i {
+		case 3: // idle
 			core.Idle = val
-		}
-		if i == 7 { // steal is 8th field (0-indexed)
+		case 4: // iowait - also idle time
+			core.Idle += val
+		case 7: // steal
 			core.Steal = val
+		case 8: // guest (already counted in user)
+			guest = val
+		case 9: // guest_nice (already counted in nice)
+			guestNice = val
 		}
 	}
+	// Subtract guest/guest_nice to avoid double-counting.
+	core.Total -= guest + guestNice
 	return core
 }
 
@@ -284,14 +316,26 @@ func CalculateCpuUsage(prev, curr *CpuSample) CpuUsage2 {
 }
 
 func calculateCoreUsage(prev, curr CoreSample) CoreUsage {
-	totalDelta := float64(curr.Total - prev.Total)
+	totalDelta := saturatingSub(curr.Total, prev.Total)
 	if totalDelta == 0 {
 		return CoreUsage{}
 	}
+	idleDelta := saturatingSub(curr.Idle, prev.Idle)
+	stealDelta := saturatingSub(curr.Steal, prev.Steal)
+	td := float64(totalDelta)
 	return CoreUsage{
-		Usage: (totalDelta - float64(curr.Idle-prev.Idle)) / totalDelta,
-		Steal: float64(curr.Steal-prev.Steal) / totalDelta,
+		Usage: float64(totalDelta-idleDelta) / td,
+		Steal: float64(stealDelta) / td,
 	}
+}
+
+// saturatingSub returns a - b, clamped to 0 if b > a.
+// This guards against apparent negative deltas from CPU hot-plug events.
+func saturatingSub(a, b uint64) uint64 {
+	if b > a {
+		return 0
+	}
+	return a - b
 }
 
 type TcpConnStats struct {
